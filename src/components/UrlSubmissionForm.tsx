@@ -21,7 +21,7 @@ export function UrlSubmissionForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const response = await fetch("https://n8n.servenorobot.com/webhook-test/2c12dc8a-5387-415a-b34c-344da04673b0", {
+      const response = await fetch("https://n8n.servenorobot.com/webhook/social-media-links", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
