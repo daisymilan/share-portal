@@ -6,12 +6,16 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "./ui/form";
 import { Input } from "./ui/input";
 import { toast } from "./ui/use-toast";
 import { v4 as uuidv4 } from "uuid";
+import { useState } from "react";
 
 const formSchema = z.object({
   articleUrl: z.string().url("Please enter a valid URL"),
 });
 
 export function UrlSubmissionForm() {
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("perplexity_api_key") || "");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -19,7 +23,29 @@ export function UrlSubmissionForm() {
     },
   });
 
+  const handleApiKeySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const input = (e.target as HTMLFormElement).apiKey.value;
+    localStorage.setItem("perplexity_api_key", input);
+    setApiKey(input);
+    setShowApiKeyInput(false);
+    toast({
+      title: "API Key Saved",
+      description: "Your Perplexity API key has been saved",
+    });
+  };
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!apiKey) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please set your Perplexity API key first",
+      });
+      setShowApiKeyInput(true);
+      return;
+    }
+
     try {
       // First, make the n8n webhook request
       const response = await fetch("https://n8n.servenorobot.com/webhook/social-media-links", {
@@ -39,7 +65,7 @@ export function UrlSubmissionForm() {
       const perplexityResponse = await fetch("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -120,32 +146,73 @@ export function UrlSubmissionForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="articleUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input
-                  placeholder="Enter URL to share"
-                  {...field}
-                  className="h-12 text-lg"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button
-          type="submit"
-          className="w-full h-12 text-lg"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting ? "Submitting..." : "Submit URL"}
-        </Button>
-      </form>
-    </Form>
+    <div className="space-y-4">
+      {showApiKeyInput && (
+        <form onSubmit={handleApiKeySubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="apiKey" className="text-sm font-medium">
+              Perplexity API Key
+            </label>
+            <Input
+              id="apiKey"
+              name="apiKey"
+              type="password"
+              placeholder="Enter your Perplexity API key"
+              defaultValue={apiKey}
+              className="h-12 text-lg"
+            />
+          </div>
+          <Button type="submit" className="w-full h-12 text-lg">
+            Save API Key
+          </Button>
+        </form>
+      )}
+      
+      {!showApiKeyInput && (
+        <>
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">API Key: ••••••••</p>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                localStorage.removeItem("perplexity_api_key");
+                setApiKey("");
+                setShowApiKeyInput(true);
+              }}
+              className="text-sm"
+            >
+              Change API Key
+            </Button>
+          </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="articleUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter URL to share"
+                        {...field}
+                        className="h-12 text-lg"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                className="w-full h-12 text-lg"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? "Submitting..." : "Submit URL"}
+              </Button>
+            </form>
+          </Form>
+        </>
+      )}
+    </div>
   );
 }
