@@ -1,66 +1,81 @@
-import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, Clock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
 
-type Submission = {
-  url: string;
+interface Submission {
+  id: string;
+  articleUrl: string;
   timestamp: string;
-  status: "completed" | "processing";
-};
+  status: "success" | "error" | "pending";
+}
 
-// This would typically come from your backend
-const recentSubmissions: Submission[] = [
-  {
-    url: "https://example.com/article-1",
-    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    status: "completed",
-  },
-  {
-    url: "https://example.com/article-2",
-    timestamp: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-    status: "processing",
-  },
-];
+export function RecentSubmissions() {
+  const { data: submissions, isLoading } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: async () => {
+      // In a real app, this would fetch from your API
+      // For demo, we'll use localStorage
+      const stored = localStorage.getItem("submissions");
+      return stored ? (JSON.parse(stored) as Submission[]) : [];
+    },
+    // Refetch every 5 seconds to show new submissions
+    refetchInterval: 5000,
+  });
 
-export const RecentSubmissions = () => {
-  return (
-    <Card className="p-6 w-full max-w-2xl mx-auto mt-8 animate-fade-in">
+  if (isLoading) {
+    return (
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-primary">Recent Submissions</h2>
-        <ScrollArea className="h-[200px] w-full rounded-md border">
-          {recentSubmissions.map((submission, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-4 border-b last:border-b-0"
-            >
-              <div className="flex items-center space-x-4">
-                {submission.status === "completed" ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Clock className="h-4 w-4 text-yellow-500" />
-                )}
-                <div className="space-y-1">
-                  <p className="text-sm font-medium truncate max-w-[300px]">
-                    {submission.url}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(submission.timestamp).toLocaleString()}
-                  </p>
-                </div>
+        <h2 className="text-2xl font-semibold text-primary">Recent Submissions</h2>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!submissions?.length) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold text-primary">Recent Submissions</h2>
+        <Card className="p-6">
+          <p className="text-gray-500">No submissions yet</p>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-semibold text-primary">Recent Submissions</h2>
+      <div className="space-y-3">
+        {submissions.map((submission) => (
+          <Card key={submission.id} className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="font-medium text-gray-900 truncate max-w-[300px]">
+                  {submission.articleUrl}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {new Date(submission.timestamp).toLocaleString()}
+                </p>
               </div>
-              <span
-                className={`text-xs px-2 py-1 rounded-full ${
-                  submission.status === "completed"
+              <div
+                className={`px-3 py-1 rounded-full text-sm ${
+                  submission.status === "success"
                     ? "bg-green-100 text-green-800"
+                    : submission.status === "error"
+                    ? "bg-red-100 text-red-800"
                     : "bg-yellow-100 text-yellow-800"
                 }`}
               >
                 {submission.status}
-              </span>
+              </div>
             </div>
-          ))}
-        </ScrollArea>
+          </Card>
+        ))}
       </div>
-    </Card>
+    </div>
   );
-};
+}

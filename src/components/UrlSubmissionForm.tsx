@@ -1,20 +1,25 @@
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Send, Loader2 } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { Button } from "./ui/button";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "./ui/form";
+import { Input } from "./ui/input";
+import { toast } from "./ui/use-toast";
+import { v4 as uuidv4 } from "uuid";
 
-export const UrlSubmissionForm = () => {
-  const [url, setUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+const formSchema = z.object({
+  articleUrl: z.string().url("Please enter a valid URL"),
+});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url) return;
+export function UrlSubmissionForm() {
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      articleUrl: "",
+    },
+  });
 
-    setIsLoading(true);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const response = await fetch("https://n8n.servenorobot.com/webhook/social-media-links", {
         method: "POST",
@@ -22,57 +27,87 @@ export const UrlSubmissionForm = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          articleUrl: url,
+          articleUrl: values.articleUrl,
           source: "web_app",
         }),
       });
 
       if (!response.ok) throw new Error("Failed to submit URL");
 
+      // Save to localStorage for recent submissions
+      const submission = {
+        id: uuidv4(),
+        articleUrl: values.articleUrl,
+        timestamp: new Date().toISOString(),
+        status: "success" as const,
+      };
+
+      const stored = localStorage.getItem("submissions");
+      const submissions = stored ? JSON.parse(stored) : [];
+      localStorage.setItem(
+        "submissions",
+        JSON.stringify([submission, ...submissions.slice(0, 9)])
+      );
+
       toast({
-        title: "Success!",
-        description: "Your URL has been submitted for processing.",
+        title: "Success",
+        description: "URL submitted successfully",
       });
-      setUrl("");
+
+      form.reset();
     } catch (error) {
+      console.error("Submission error:", error);
+      
+      // Save failed submission to history
+      const submission = {
+        id: uuidv4(),
+        articleUrl: values.articleUrl,
+        timestamp: new Date().toISOString(),
+        status: "error" as const,
+      };
+
+      const stored = localStorage.getItem("submissions");
+      const submissions = stored ? JSON.parse(stored) : [];
+      localStorage.setItem(
+        "submissions",
+        JSON.stringify([submission, ...submissions.slice(0, 9)])
+      );
+
       toast({
+        variant: "destructive",
         title: "Error",
         description: "Failed to submit URL. Please try again.",
-        variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <Card className="p-6 w-full max-w-2xl mx-auto animate-fade-in">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-primary">Submit Content</h2>
-          <p className="text-sm text-gray-500">
-            Enter the URL of the content you want to distribute across social media platforms.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="url"
-            placeholder="Enter URL here..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="flex-1"
-            required
-          />
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            <span className="ml-2">Submit</span>
-          </Button>
-        </div>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="articleUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input
+                  placeholder="Enter URL to share"
+                  {...field}
+                  className="h-12 text-lg"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button
+          type="submit"
+          className="w-full h-12 text-lg"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? "Submitting..." : "Submit URL"}
+        </Button>
       </form>
-    </Card>
+    </Form>
   );
-};
+}
