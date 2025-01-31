@@ -21,6 +21,7 @@ export function UrlSubmissionForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      // First, make the n8n webhook request
       const response = await fetch("https://n8n.servenorobot.com/webhook/social-media-links", {
         method: "POST",
         headers: {
@@ -33,6 +34,43 @@ export function UrlSubmissionForm() {
       });
 
       if (!response.ok) throw new Error("Failed to submit URL");
+
+      // Make the Perplexity API request
+      const perplexityResponse = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-sonar-small-128k-online",
+          messages: [
+            {
+              role: "system",
+              content: "Summarize the following article in detail"
+            },
+            {
+              role: "user",
+              content: values.articleUrl
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.2,
+          top_p: 0.9,
+          search_domain_filter: ["perplexity.ai"],
+          return_images: false,
+          return_related_questions: false,
+          search_recency_filter: "month",
+          top_k: 0,
+          stream: false,
+          presence_penalty: 0,
+          frequency_penalty: 1
+        }),
+      });
+
+      if (!perplexityResponse.ok) {
+        throw new Error("Failed to process with Perplexity");
+      }
 
       // Save to localStorage for recent submissions
       const submission = {
@@ -51,7 +89,7 @@ export function UrlSubmissionForm() {
 
       toast({
         title: "Success",
-        description: "URL submitted successfully",
+        description: "URL submitted and processed successfully",
       });
 
       form.reset();
